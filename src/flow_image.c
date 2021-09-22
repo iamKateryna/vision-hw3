@@ -41,13 +41,37 @@ void draw_line(image im, float x, float y, float dx, float dy)
     }
 }
 
+//checking bounds (for calculating summed area table)
+float get_pixel_check_bounds(image im, int x, int y, int c){
+    if(x < 0 || x > im.w - 1 || y < 0 || y > im.h - 1 || c < 0 || c > im.c - 1)
+    {
+        return 0;
+    }
+    int index = im.w*im.h*c + im.w*y + x;
+    return im.data[index];
+}
+
 // Make an integral image or summed area table from an image
 // image im: image to process
 // returns: image I such that I[x,y] = sum{i<=x, j<=y}(im[i,j])
+// algorithm from Wikipedia: https://en.wikipedia.org/wiki/Summed-area_table
 image make_integral_image(image im)
 {
     image integ = make_image(im.w, im.h, im.c);
     // TODO: fill in the integral image
+    for (int i = 0; i < im.w; ++i) {
+        for (int j = 0; j < im.h; ++j) {
+            for (int k = 0; k < im.c; ++k) {
+                float D = get_pixel_check_bounds(im, i, j, k); //starting point (pixel value of orig image)
+                float B = get_pixel_check_bounds(integ, i, j - 1, k); //top right
+                float C = get_pixel_check_bounds(integ, i - 1, j, k); //bottom left
+                float A = get_pixel_check_bounds(integ, i - 1, j - 1, k); //top left
+
+                float pixel_value = D + C + B - A;
+                set_pixel(integ, i, j, k, pixel_value);
+            }
+        }
+    }
     return integ;
 }
 
@@ -57,11 +81,43 @@ image make_integral_image(image im)
 // returns: smoothed image
 image box_filter_image(image im, int s)
 {
-    int i,j,k;
-    image integ = make_integral_image(im);
-    image S = make_image(im.w, im.h, im.c);
-    // TODO: fill in S using the integral image.
-    return S;
+    if(1)
+    {
+        int i,j,k;
+        image integ = make_integral_image(im);
+        image S = make_image(im.w, im.h, im.c);
+        float weight = 1.0/(s*s);
+        // TODO: fill in S using the integral image.
+        for(i = 0 ; i < S.h ; i++)
+        {
+            int top_row = i - s/2 - 1;
+            int bottom_row = i + s/2;
+            for(j = 0 ; j < S.w ; j++)
+            {
+                int left_col = j - s/2 - 1;
+                int right_col = j + s/2;
+                for(k = 0 ; k < S.c ; k++)
+                {
+                    float right_bottom = get_pixel(im,right_col,bottom_row,k);
+                    float right_top = get_pixel(integ,right_col,top_row,k);
+                    float left_top = get_pixel(integ,left_col,top_row,k);
+                    float left_bottom = get_pixel(integ,left_col,bottom_row,k);
+
+                    float pixel_value = (right_bottom - right_top + left_top - left_bottom)*weight;
+                    set_pixel(S,j,i,k,pixel_value);
+                }
+            }
+        }
+        free_image(integ);
+        return S;
+    }
+    else
+    {
+        image box = make_box_filter(s);
+        image filtered = convolve_image(im,box,1);
+        free_image(box);
+        return filtered;
+    }
 }
 
 // Calculate the time-structure matrix of an image pair.
